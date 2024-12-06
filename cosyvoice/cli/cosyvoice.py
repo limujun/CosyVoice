@@ -47,6 +47,7 @@ class CosyVoice:
                         '{}/flow.pt'.format(model_dir),
                         '{}/hift.pt'.format(model_dir))
         if load_jit:
+            print('使用量化模型')
             self.model.load_jit('{}/llm.text_encoder.fp16.zip'.format(model_dir),
                                 '{}/llm.llm.fp16.zip'.format(model_dir),
                                 '{}/flow.encoder.fp32.zip'.format(model_dir))
