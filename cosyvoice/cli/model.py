@@ -70,6 +70,7 @@ class CosyVoiceModel:
 
     def load_jit(self, llm_text_encoder_model, llm_llm_model, flow_encoder_model):
         assert self.fp16 is True, "we only provide fp16 jit model, set fp16=True if you want to use jit model"
+        print("使用fp16 模型")
         llm_text_encoder = torch.jit.load(llm_text_encoder_model, map_location=self.device)
         self.llm.text_encoder = llm_text_encoder
         llm_llm = torch.jit.load(llm_llm_model, map_location=self.device)

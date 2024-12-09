@@ -17,7 +17,7 @@ import requests
 import torch
 import torchaudio
 import numpy as np
-
+import time
 
 def main():
     url = "http://{}:{}/inference_{}".format(args.host, args.port, args.mode)
@@ -63,9 +63,9 @@ if __name__ == "__main__":
                         default='0.0.0.0')
     parser.add_argument('--port',
                         type=int,
-                        default='50000')
+                        default='6006')
     parser.add_argument('--mode',
-                        default='sft',
+                        default='zero_shot',
                         choices=['sft', 'zero_shot', 'cross_lingual', 'instruct'],
                         help='request mode')
     parser.add_argument('--tts_text',
@@ -89,4 +89,6 @@ if __name__ == "__main__":
                         default='demo.wav')
     args = parser.parse_args()
     prompt_sr, target_sr = 16000, 22050
+    start_time = time.time()
     main()
+    print("运行时间："+str(time.time()-start_time))
