@@ -33,7 +33,8 @@ from io import BytesIO
 from scipy.io.wavfile import write
 import torchaudio
 import torch
-from fastapi import Response
+from fastapi import Response,HTTPException
+
 
 
 app = FastAPI()
@@ -85,7 +86,7 @@ async def tts(request: TTSRequest):
     try:
         prompt_speech_16k = load_wav(sample_wav, 16000)
         prompt_text = read_lab_file(sample_text)
-    except FileNotFoundError:
+    except Exception:
         raise HTTPException(status_code=404, detail="Audio file not found.")
     print("加载音频时间:", time.time() - start_time)
     
