@@ -29,6 +29,12 @@ from cosyvoice.utils.file_utils import load_wav
 from pydantic import BaseModel
 from typing import Optional
 import time
+from io import BytesIO
+from scipy.io.wavfile import write
+import torchaudio
+import torch
+from fastapi import Response
+
 
 app = FastAPI()
 # set cross region allowance
@@ -46,74 +52,61 @@ class TTSRequest(BaseModel):
     role_name: str
     reference_audio: str = None
 
-def generate_data(model_output):
-    for i in model_output:
-        tts_audio = (i['tts_speech'].numpy() * (2 ** 15)).astype(np.int16).tobytes()
-        yield tts_audio
 
 def read_lab_file(file_path):
+    """读取 .lab 文件的第一行"""
     with open(file_path, 'r', encoding='utf-8') as f:
-        lines = f.readlines()
-    print(lines[0])
-    return lines[0]
+        first_line = f.readline().strip()
+    print(first_line)
+    return first_line
 
-def buildResponse(output):
-    buffer = io.BytesIO()
-    torchaudio.save(buffer, output, 22050, format="wav")
-    buffer.seek(0)
-    return Response(content=buffer.read(-1), media_type="audio/wav")
-
-
-@app.get("/inference_sft")
-async def inference_sft(tts_text: str = Form(), spk_id: str = Form()):
-    model_output = cosyvoice.inference_sft(tts_text, spk_id)
-    return StreamingResponse(generate_data(model_output))
-
-
-@app.get("/inference_zero_shot")
-async def inference_zero_shot(tts_text: str = Form(), prompt_text: str = Form(), prompt_wav: UploadFile = File()):
-    prompt_speech_16k = load_wav(prompt_wav.file, 16000)
-    model_output = cosyvoice.inference_zero_shot(tts_text, prompt_text, prompt_speech_16k)
-    return StreamingResponse(generate_data(model_output))
 
 @app.post("/api/voice/tts")
 async def tts(request: TTSRequest):
-    input_text = request.text
-    role_name = request.role_name
-    reference_audio = request.reference_audio
-    if not role_name:
-        role_name = "miaoer"
-    if not reference_audio:
-        sample_text = f"role/{role_name}/sample.lab"
-        sample_wav = f"role/{role_name}/sample.wav"
-    else:
-        sample_text = f"role/{role_name}/sample{reference_audio}.lab"
-        sample_wav = f"role/{role_name}/sample{reference_audio}.wav"
+    """处理 TTS 请求并返回合成音频流"""
     
-    start = time.time()
-    prompt_speech_16k = load_wav(sample_wav, 16000)
-    prompt_text = read_lab_file(sample_text)
-    end2 = time.time()
-    print("加载 音频 time:", end2 - start)
+    # 获取输入数据
+    input_text = request.text
+    role_name = request.role_name or "miaoer"
+    reference_audio = request.reference_audio or ""
+    
+    # 如果没有输入文本，提前返回错误响应
+    if not input_text:
+        raise HTTPException(status_code=400, detail="Text input is required.")
+    
+    # 构造音频和文本文件路径
+    sample_text = f"role/{role_name}/sample{reference_audio}.lab" if reference_audio else f"role/{role_name}/sample.lab"
+    sample_wav = f"role/{role_name}/sample{reference_audio}.wav" if reference_audio else f"role/{role_name}/sample.wav"
+    
+    # 异步加载提示音频和文本（假设load_wav和read_lab_file支持异步）
+    start_time = time.time()
+    # prompt_speech_16k = load_wav(sample_wav, 16000) 
+    # prompt_text = read_lab_file(sample_text)
+    try:
+        prompt_speech_16k = load_wav(sample_wav, 16000)
+        prompt_text = read_lab_file(sample_text)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Audio file not found.")
+    print("加载音频时间:", time.time() - start_time)
+    
     output = cosyvoice.inference_zero_shot(input_text, prompt_text, prompt_speech_16k)
-    end = time.time()
-    print("infer time:", end - start)
-    # return buildResponse(output['tts_speech'])
-    return StreamingResponse(generate_data(output))
 
+    # 合并音频数据并转换为 int16 格式
+    audio_array = np.concatenate([i['tts_speech'].numpy() for i in output], axis=0)
+    audio_array = (audio_array * (2 ** 15)).astype(np.int16)  # 转换为 int16
+    tts_speech = torch.from_numpy(audio_array).unsqueeze(0)
+    if tts_speech.ndimension() == 3:
+        tts_speech = tts_speech[0]  # 选择第一个音频样本
 
+    # 保存张量为音频流并返回
+    with BytesIO() as buffer:
+        torchaudio.save(buffer, tts_speech, sample_rate=22050, format="wav")
+        buffer.seek(0)
+        audio_response = buffer.read()
 
-@app.get("/inference_cross_lingual")
-async def inference_cross_lingual(tts_text: str = Form(), prompt_wav: UploadFile = File()):
-    prompt_speech_16k = load_wav(prompt_wav.file, 16000)
-    model_output = cosyvoice.inference_cross_lingual(tts_text, prompt_speech_16k)
-    return StreamingResponse(generate_data(model_output))
+    print("总处理时间:", time.time() - start_time)
+    return Response(content=audio_response, media_type="audio/wav")
 
-
-@app.get("/inference_instruct")
-async def inference_instruct(tts_text: str = Form(), spk_id: str = Form(), instruct_text: str = Form()):
-    model_output = cosyvoice.inference_instruct(tts_text, spk_id, instruct_text)
-    return StreamingResponse(generate_data(model_output))
 
 
 if __name__ == '__main__':
