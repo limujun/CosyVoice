@@ -105,6 +105,8 @@ async def tts(request: TTSRequest):
         audio_response = buffer.read()
 
     print("总处理时间:", time.time() - start_time)
+    del output, tts_speech  # 手动删除不再使用的变量
+    torch.cuda.empty_cache()  # 清理显存
     return Response(content=audio_response, media_type="audio/wav")
 
 
