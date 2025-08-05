@@ -38,7 +38,7 @@ app.add_middleware(
 
 
 def generate_data(model_output):
-    for i in model_output:
+    for i in model_output:frontend_zero_shot
         tts_audio = (i['tts_speech'].numpy() * (2 ** 15)).astype(np.int16).tobytes()
         yield tts_audio
 
@@ -52,7 +52,7 @@ async def inference_sft(tts_text: str = Form(), spk_id: str = Form()):
 @app.get("/inference_zero_shot")
 async def inference_zero_shot(tts_text: str = Form(), prompt_text: str = Form(), prompt_wav: UploadFile = File()):
     prompt_speech_16k = load_wav(prompt_wav.file, 16000)
-    model_output = cosyvoice.inference_zero_shot(tts_text, prompt_text, prompt_speech_16k)
+    model_output = cosyvoice.inference_zero_shot(tts_text, frontend_zero_shot, prompt_speech_16k)
     return StreamingResponse(generate_data(model_output))
 
 
